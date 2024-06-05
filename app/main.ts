@@ -1,4 +1,5 @@
 import * as net from 'net';
+import * as fs from 'node:fs'
 
 type RouterHandler = (params: { [key: string]: string }, usrAgent?: string) => Promise<string>
 
@@ -34,6 +35,9 @@ class Router {
 }
 
 const router = new Router()
+
+
+// ROUTES:
 router.addRoute(/^\/$/, async () => {
   return `HTTP/1.1 200 OK\r\n\r\n`
 })
@@ -43,6 +47,16 @@ router.addRoute(/^\/echo\/(?<msg>.+)$/, async (params) => {
 router.addRoute(/^\/user-agent$/, async (params, usrAgent) => {
   const res = usrAgent || 'No User-Agent provided'
   return `HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ${res.length}\r\n\r\n${res}`
+})
+router.addRoute(/^\/files\/(?<file>.+)$/, async (params) => {
+  try {
+    const fileData = fs.readFileSync(`/tmp/${params.file}`, 'utf-8')
+    console.log(fileData)
+    return `HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ${fileData.length}\r\n\r\n${fileData}`
+  } catch (err) {
+    console.log("Error has occurred while reading file: ", err)
+    return `HTTP/1.1 404 Not Found\r\n\r\n`
+  }
 })
 
 const server = net.createServer((socket) => {
