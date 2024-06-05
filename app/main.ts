@@ -1,5 +1,5 @@
 import * as net from 'net';
-import * as fs from 'node:fs'
+import * as fs from 'fs/promises'
 
 type RouterHandler = (params: { [key: string]: string }, usrAgent?: string) => Promise<string>
 
@@ -48,10 +48,14 @@ router.addRoute(/^\/user-agent$/, async (params, usrAgent) => {
   const res = usrAgent || 'No User-Agent provided'
   return `HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ${res.length}\r\n\r\n${res}`
 })
+
+const baseDir = process.argv[3]
+
 router.addRoute(/^\/files\/(?<file>.+)$/, async (params) => {
   try {
-    const fileData = fs.readFileSync(`/tmp/${params.file}`, 'utf-8')
-    console.log(fileData)
+    const path = `${baseDir}${params.file}`
+    console.log(`baseDir: ${baseDir}, path: ${path}`)
+    const fileData = await fs.readFile(path, 'utf-8')
     return `HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ${fileData.length}\r\n\r\n${fileData}`
   } catch (err) {
     console.log("Error has occurred while reading file: ", err)
