@@ -1,6 +1,6 @@
 import * as net from 'net';
 
-type RouterHandler = (params: { [key: string]: string }, usrAgent?: string) => string
+type RouterHandler = (params: { [key: string]: string }, usrAgent?: string) => Promise<string>
 
 type Route = {
   pattern: RegExp;
@@ -14,14 +14,18 @@ class Router {
     this.routes.push({ pattern, handler })
   }
 
-  handleReq(path: string, usrAgent?: string): string | undefined {
+  async handleReq(path: string, usrAgent?: string): Promise<string | undefined> {
+    if (!path) {
+      console.error('Path is not defined!')
+      return undefined
+    }
     for (const route of this.routes) {
       const match = path.match(route.pattern)
 
       if (match) {
         const params = match.groups || {}
         console.log(params)
-        return route.handler(params, usrAgent)
+        return await route.handler(params, usrAgent)
       }
     }
     console.log("No route matched")
@@ -30,31 +34,37 @@ class Router {
 }
 
 const router = new Router()
-router.addRoute(/^\/$/, () => {
+router.addRoute(/^\/$/, async () => {
   return `HTTP/1.1 200 OK\r\n\r\n`
 })
-router.addRoute(/^\/echo\/(?<msg>.+)$/, (params) => {
+router.addRoute(/^\/echo\/(?<msg>.+)$/, async (params) => {
   return `HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ${params.msg.length}\r\n\r\n${params.msg}`
 })
-router.addRoute(/^\/user-agent$/, (params, usrAgent) => {
+router.addRoute(/^\/user-agent$/, async (params, usrAgent) => {
   const res = usrAgent || 'No User-Agent provided'
   return `HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ${res.length}\r\n\r\n${res}`
 })
 
 const server = net.createServer((socket) => {
-  socket.on("data", (data) => {
-    const req = data.toString()
-    const path = req.split(' ')[1]
-    const usrAgentHeader = req.split('\n').find(line => line.startsWith('User-Agent:'))
-    const usrAgent = usrAgentHeader ? usrAgentHeader.slice(12).trim() : undefined
-    console.log(req)
-    let res = router.handleReq(path, usrAgent)
-    if (res !== undefined) {
-      socket.write(res)
-    } else {
-      socket.write(`HTTP/1.1 404 Not Found\r\n\r\n`)
+  socket.on("data", async (data) => {
+    try {
+      const req = data.toString()
+      const path = req.split(' ')[1]
+      const usrAgentHeader = req.split('\n').find(line => line.startsWith('User-Agent:'))
+      const usrAgent = usrAgentHeader ? usrAgentHeader.slice(12).trim() : undefined
+      console.log(req)
+      let res = await router.handleReq(path, usrAgent)
+      if (res !== undefined) {
+        socket.write(res)
+      } else {
+        socket.write(`HTTP/1.1 404 Not Found\r\n\r\n`)
+      }
+    } catch (err) {
+      console.error("Error processing request!")
+      socket.write(`HTTP/1.1 500 Internal Server Error\r\n\r\n`)
+    } finally {
+      socket.end()
     }
-    socket.end()
   })
 });
 
