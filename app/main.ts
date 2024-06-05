@@ -56,7 +56,7 @@ router.addRoute(/^\/files\/(?<file>.+)$/, async (params) => {
     const path = `${baseDir}${params.file}`
     console.log(`baseDir: ${baseDir}, path: ${path}`)
     const fileData = await fs.readFile(path, 'utf-8')
-    return `HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ${fileData.length}\r\n\r\n${fileData}`
+    return `HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: ${fileData.length}\r\n\r\n${fileData}`
   } catch (err) {
     console.log("Error has occurred while reading file: ", err)
     return `HTTP/1.1 404 Not Found\r\n\r\n`
