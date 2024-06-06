@@ -91,7 +91,7 @@ const server = net.createServer((socket) => {
       const req = data.toString()
       const path = req.split(' ')[1]
       const method = req.split(' ')[0].trim()
-      const reqBody = req.split('\n')[7]
+      const reqBody = req.split('\r\n\r\n')[1];
       const usrAgentHeader = req.split('\n').find(line => line.startsWith('User-Agent:'))
       const usrAgent = usrAgentHeader ? usrAgentHeader.slice(12).trim() : undefined
       console.log(req)
