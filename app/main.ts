@@ -103,7 +103,7 @@ router.addRoute(/^\/user-agent$/, async (method, params, userAgent, reqBody, enc
     return new responseBuilder()
       .status(200)
       .header("Content-Type", "text/plain")
-      .header("Content-Length", params.res.length.toString())
+      .header("Content-Length", res.length.toString())
       .body(res)
       .buildResponse(encoding)
   }
@@ -162,7 +162,7 @@ const server = net.createServer((socket) => {
         socket.write(new responseBuilder().status(404).buildResponse())
       }
     } catch (err) {
-      console.error("Error processing request!")
+      console.error("Error processing request!", err)
       socket.write(new responseBuilder().status(500).buildResponse())
     } finally {
       socket.end()
