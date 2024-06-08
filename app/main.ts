@@ -83,15 +83,10 @@ class responseBuilder {
           body = Buffer.from(body, 'utf8');
         }
         body = zlib.gzipSync(body)
+        this.header("Content-Encoding", "gzip");
       }
     }
-    if (validEncodings.length > 0) {
-      let valuesStr = validEncodings.join(", ")
-      this.header("Content-Encoding", valuesStr)
-      this.header("Content-Length", body.length.toString())
-    } else {
-      this.header("Content-Length", body.length.toString())
-    }
+    this.header("Content-Length", body.length.toString());
     const statusMsg = statuses[this.statusCode] || "Unknown Status"
     const headers = Object.entries(this.headers)
       .map(([key, value]) => `${key}: ${value}`)
