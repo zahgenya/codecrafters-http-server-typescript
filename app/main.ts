@@ -91,8 +91,9 @@ class responseBuilder {
       let valuesStr = validEncodings.join(", ")
       this.header("Content-Encoding", valuesStr)
       this.header("Content-Length", zippedBody.length.toString())
+      body = zippedBody
     } else {
-    this.header("Content-Length", body.length.toString())
+      this.header("Content-Length", body.length.toString())
     }
     const statusMsg = statuses[this.statusCode] || "Unknown Status"
     const headers = Object.entries(this.headers)
