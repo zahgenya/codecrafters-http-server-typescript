@@ -1,7 +1,7 @@
 import * as net from "net";
 import * as fs from "fs/promises"
 
-type RouterHandler = (method: string, params: { [key: string]: string }, usrAgent?: string, reqBody?: string, encoding?: string) => Promise<string>
+type RouterHandler = (method: string, params: { [key: string]: string }, usrAgent?: string, reqBody?: string, encodings?: string[]) => Promise<string>
 
 type Route = {
   pattern: RegExp;
@@ -16,6 +16,8 @@ const statuses: { [key: number]: string } = {
   500: "Internal Server Error",
 }
 
+const serverEncodings: string[] = ["gzip"]
+
 class Router {
   private routes: Route[] = [];
 
@@ -23,7 +25,7 @@ class Router {
     this.routes.push({ pattern, handler })
   }
 
-  async handleReq(method: string, path: string, usrAgent?: string, reqBody?: string, encoding?: string): Promise<string | undefined> {
+  async handleReq(method: string, path: string, usrAgent?: string, reqBody?: string, encodings?: string[]): Promise<string | undefined> {
     if (!path) {
       console.error("Path is not defined!")
       return undefined
@@ -34,7 +36,7 @@ class Router {
       if (match) {
         const params = match.groups || {}
         console.log(params)
-        return await route.handler(method, params, usrAgent, reqBody, encoding)
+        return await route.handler(method, params, usrAgent, reqBody, encodings)
       }
     }
     console.log("No route matched")
@@ -65,10 +67,17 @@ class responseBuilder {
     return this
   }
 
-  buildResponse(acceptEncoding?: string): string {
-    console.log("Encoding inside builder: ", acceptEncoding)
-    if (acceptEncoding?.includes("gzip")) {
-      this.header("Content-Encoding", "gzip")
+  buildResponse(acceptEncodings?: string[]): string {
+    console.log("Encoding inside builder: ", acceptEncodings)
+    if (acceptEncodings !== undefined) {
+      let values: string[] = []
+      for (let i = 0; i < acceptEncodings.length; i++) {
+        if (serverEncodings.includes(acceptEncodings[i])) {
+          values.push(acceptEncodings[i])
+        }
+      }
+      let valuesStr = values.join(", ")
+      this.header("Content-Encoding", valuesStr)
     }
     const statusMsg = statuses[this.statusCode] || "Unknown Status"
     const headers = Object.entries(this.headers)
@@ -86,18 +95,18 @@ router.addRoute(/^\/$/, async (method) => {
   }
   return new responseBuilder().status(405).buildResponse()
 })
-router.addRoute(/^\/echo\/(?<msg>.+)$/, async (method, params, userAgent, reqBody, encoding) => {
+router.addRoute(/^\/echo\/(?<msg>.+)$/, async (method, params, userAgent, reqBody, encodings) => {
   if (method === "GET") {
     return new responseBuilder()
       .status(200)
       .header("Content-Type", "text/plain")
       .header("Content-Length", params.msg.length.toString())
       .body(params.msg)
-      .buildResponse(encoding)
+      .buildResponse(encodings)
   }
   return new responseBuilder().status(405).buildResponse()
 })
-router.addRoute(/^\/user-agent$/, async (method, params, userAgent, reqBody, encoding) => {
+router.addRoute(/^\/user-agent$/, async (method, params, userAgent, reqBody, encodings) => {
   const res = userAgent || "No User-Agent provided"
   if (method === "GET") {
     return new responseBuilder()
@@ -105,14 +114,14 @@ router.addRoute(/^\/user-agent$/, async (method, params, userAgent, reqBody, enc
       .header("Content-Type", "text/plain")
       .header("Content-Length", res.length.toString())
       .body(res)
-      .buildResponse(encoding)
+      .buildResponse(encodings)
   }
   return new responseBuilder().status(405).buildResponse()
 })
 
 const baseDir = process.argv[3]
 
-router.addRoute(/^\/files\/(?<file>.+)$/, async (method, params, userAgent, reqBody, encoding) => {
+router.addRoute(/^\/files\/(?<file>.+)$/, async (method, params, userAgent, reqBody, encodings) => {
   if (method === "GET") {
     try {
       const path = `${baseDir}${params.file}`
@@ -123,7 +132,7 @@ router.addRoute(/^\/files\/(?<file>.+)$/, async (method, params, userAgent, reqB
         .header("Content-Type", "application/octet-stream")
         .header("Content-Length", fileData.length.toString())
         .body(fileData)
-        .buildResponse(encoding)
+        .buildResponse(encodings)
     } catch (err) {
       console.log("Error has occurred while reading file: ", err)
       return new responseBuilder().status(404).buildResponse()
@@ -151,11 +160,11 @@ const server = net.createServer((socket) => {
       const reqBody = req.split("\r\n\r\n")[1];
       const usrAgentHeader = req.split("\n").find(line => line.startsWith("User-Agent:"))
       const encodingHeader = req.split("\n").find(line => line.startsWith("Accept-Encoding:"))
-      const encoding = encodingHeader ? encodingHeader.slice(17).trim() : undefined
-      console.log(`ENCODING=(${encoding})`)
+      const encodings = encodingHeader ? encodingHeader.slice(17).trim().split(", ") : undefined
+      console.log(`ENCODING=(${encodings})`)
       const usrAgent = usrAgentHeader ? usrAgentHeader.slice(12).trim() : undefined
       console.log(req)
-      let res = await router.handleReq(method, path, usrAgent, reqBody, encoding)
+      let res = await router.handleReq(method, path, usrAgent, reqBody, encodings)
       if (res !== undefined) {
         socket.write(res)
       } else {
