@@ -1,9 +1,7 @@
 import * as net from "net";
 import * as fs from "fs/promises";
 import * as zlib from "zlib";
-import { promisify } from "util";
 
-const gzip = promisify(zlib.gzip)
 
 type RouterHandler = (method: string, params: { [key: string]: string }, usrAgent?: string, reqBody?: string, encodings?: string[]) => Promise<string>
 
@@ -74,6 +72,7 @@ class responseBuilder {
   async buildResponse(acceptEncodings?: string[]): Promise<string> {
     console.log("Encoding inside builder: ", acceptEncodings)
     let body = this.contentBody
+    let zippedBody: Buffer | undefined
     let validEncodings: string[] = []
     if (acceptEncodings !== undefined && acceptEncodings.length > 0) {
       for (let i = 0; i < acceptEncodings.length; i++) {
@@ -82,22 +81,25 @@ class responseBuilder {
         }
       }
       if (validEncodings.includes("gzip")) {
-        let compressedBody = await gzip(body)
-        //body = compressedBody.toString('base64')
-        body = compressedBody
+        if (typeof body === 'string') {
+          body = Buffer.from(body, 'utf8');
+        }
+        zippedBody = zlib.gzipSync(body)
       }
     }
-    if (validEncodings.length > 0) {
+    if (validEncodings.length > 0 && zippedBody !== undefined) {
       let valuesStr = validEncodings.join(", ")
       this.header("Content-Encoding", valuesStr)
-    }
+      this.header("Content-Length", zippedBody.length.toString())
+    } else {
     this.header("Content-Length", body.length.toString())
+    }
     const statusMsg = statuses[this.statusCode] || "Unknown Status"
     const headers = Object.entries(this.headers)
       .map(([key, value]) => `${key}: ${value}`)
       .join(this.clrf)
     const responseStr = `HTTP/1.1 ${this.statusCode} ${statusMsg}${this.clrf}`
-    return `${responseStr}${headers}${this.clrf}${this.clrf}${body}`
+    return `${responseStr}${headers}${this.clrf}${this.clrf}${body.toString()}`
   }
 }
 
