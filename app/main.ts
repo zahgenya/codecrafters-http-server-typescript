@@ -52,7 +52,7 @@ const router = new Router()
 
 class responseBuilder {
   private statusCode: number = 0;
-  private contentBody: string = "";
+  private contentBody: string | Buffer = "";
   private headers: { [key: string]: string } = {};
   private clrf: string = "\r\n";
 
@@ -66,7 +66,7 @@ class responseBuilder {
     return this
   }
 
-  body(content: string): this {
+  body(content: string | Buffer): this {
     this.contentBody = content
     return this
   }
@@ -83,7 +83,8 @@ class responseBuilder {
       }
       if (validEncodings.includes("gzip")) {
         let compressedBody = await gzip(body)
-        body = compressedBody.toString('base64')
+        //body = compressedBody.toString('base64')
+        body = compressedBody
       }
     }
     if (validEncodings.length > 0) {
