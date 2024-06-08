@@ -70,9 +70,7 @@ class responseBuilder {
   }
 
   async buildResponse(acceptEncodings?: string[]): Promise<string> {
-    console.log("Encoding inside builder: ", acceptEncodings)
     let body = this.contentBody
-    let zippedBody: Buffer | undefined
     let validEncodings: string[] = []
     if (acceptEncodings !== undefined && acceptEncodings.length > 0) {
       for (let i = 0; i < acceptEncodings.length; i++) {
@@ -84,14 +82,13 @@ class responseBuilder {
         if (typeof body === 'string') {
           body = Buffer.from(body, 'utf8');
         }
-        zippedBody = zlib.gzipSync(body)
+        body = zlib.gzipSync(body)
       }
     }
-    if (validEncodings.length > 0 && zippedBody !== undefined) {
+    if (validEncodings.length > 0) {
       let valuesStr = validEncodings.join(", ")
       this.header("Content-Encoding", valuesStr)
-      this.header("Content-Length", zippedBody.length.toString())
-      body = zippedBody
+      this.header("Content-Length", body.length.toString())
     } else {
       this.header("Content-Length", body.length.toString())
     }
@@ -100,7 +97,8 @@ class responseBuilder {
       .map(([key, value]) => `${key}: ${value}`)
       .join(this.clrf)
     const responseStr = `HTTP/1.1 ${this.statusCode} ${statusMsg}${this.clrf}`
-    return `${responseStr}${headers}${this.clrf}${this.clrf}${body.toString()}`
+    let hexBody = body.toString("hex")
+    return `${responseStr}${headers}${this.clrf}${this.clrf}${hexBody}`
   }
 }
 
