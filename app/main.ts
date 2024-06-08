@@ -1,5 +1,9 @@
 import * as net from "net";
-import * as fs from "fs/promises"
+import * as fs from "fs/promises";
+import * as zlib from "zlib";
+import { promisify } from "util";
+
+const gzip = promisify(zlib.gzip)
 
 type RouterHandler = (method: string, params: { [key: string]: string }, usrAgent?: string, reqBody?: string, encodings?: string[]) => Promise<string>
 
@@ -67,24 +71,32 @@ class responseBuilder {
     return this
   }
 
-  buildResponse(acceptEncodings?: string[]): string {
+  async buildResponse(acceptEncodings?: string[]): Promise<string> {
     console.log("Encoding inside builder: ", acceptEncodings)
-    if (acceptEncodings !== undefined) {
-      let values: string[] = []
+    let body = this.contentBody
+    let validEncodings: string[] = []
+    if (acceptEncodings !== undefined && acceptEncodings.length > 0) {
       for (let i = 0; i < acceptEncodings.length; i++) {
         if (serverEncodings.includes(acceptEncodings[i])) {
-          values.push(acceptEncodings[i])
+          validEncodings.push(acceptEncodings[i])
         }
       }
-      let valuesStr = values.join(", ")
+      if (validEncodings.includes("gzip")) {
+        let compressedBody = await gzip(body)
+        body = compressedBody.toString('base64')
+      }
+    }
+    if (validEncodings.length > 0) {
+      let valuesStr = validEncodings.join(", ")
       this.header("Content-Encoding", valuesStr)
     }
+    this.header("Content-Length", body.length.toString())
     const statusMsg = statuses[this.statusCode] || "Unknown Status"
     const headers = Object.entries(this.headers)
       .map(([key, value]) => `${key}: ${value}`)
       .join(this.clrf)
     const responseStr = `HTTP/1.1 ${this.statusCode} ${statusMsg}${this.clrf}`
-    return `${responseStr}${headers}${this.clrf}${this.clrf}${this.contentBody}`
+    return `${responseStr}${headers}${this.clrf}${this.clrf}${body}`
   }
 }
 
@@ -100,7 +112,6 @@ router.addRoute(/^\/echo\/(?<msg>.+)$/, async (method, params, userAgent, reqBod
     return new responseBuilder()
       .status(200)
       .header("Content-Type", "text/plain")
-      .header("Content-Length", params.msg.length.toString())
       .body(params.msg)
       .buildResponse(encodings)
   }
@@ -112,7 +123,6 @@ router.addRoute(/^\/user-agent$/, async (method, params, userAgent, reqBody, enc
     return new responseBuilder()
       .status(200)
       .header("Content-Type", "text/plain")
-      .header("Content-Length", res.length.toString())
       .body(res)
       .buildResponse(encodings)
   }
@@ -130,7 +140,6 @@ router.addRoute(/^\/files\/(?<file>.+)$/, async (method, params, userAgent, reqB
       return new responseBuilder()
         .status(200)
         .header("Content-Type", "application/octet-stream")
-        .header("Content-Length", fileData.length.toString())
         .body(fileData)
         .buildResponse(encodings)
     } catch (err) {
@@ -168,11 +177,11 @@ const server = net.createServer((socket) => {
       if (res !== undefined) {
         socket.write(res)
       } else {
-        socket.write(new responseBuilder().status(404).buildResponse())
+        socket.write(await new responseBuilder().status(404).buildResponse())
       }
     } catch (err) {
       console.error("Error processing request!", err)
-      socket.write(new responseBuilder().status(500).buildResponse())
+      socket.write(await new responseBuilder().status(500).buildResponse())
     } finally {
       socket.end()
     }
