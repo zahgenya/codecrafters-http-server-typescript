@@ -3,7 +3,7 @@ import * as fs from "fs/promises";
 import * as zlib from "zlib";
 
 
-type RouterHandler = (method: string, params: { [key: string]: string }, usrAgent?: string, reqBody?: string, encodings?: string[]) => Promise<string>
+type RouterHandler = (method: string, params: { [key: string]: string }, usrAgent?: string, reqBody?: string, encodings?: string[]) => Promise<{ headers: string, body: Buffer }>
 
 type Route = {
   pattern: RegExp;
@@ -27,24 +27,25 @@ class Router {
     this.routes.push({ pattern, handler })
   }
 
-  async handleReq(method: string, path: string, usrAgent?: string, reqBody?: string, encodings?: string[]): Promise<string | undefined> {
+  async handleReq(method: string, path: string, usrAgent?: string, reqBody?: string, encodings?: string[]): Promise<{ headers: string, body: Buffer } | undefined> {
     if (!path) {
-      console.error("Path is not defined!")
-      return undefined
+      console.error("Path is not defined!");
+      return undefined;
     }
     for (const route of this.routes) {
-      const match = path.match(route.pattern)
+      const match = path.match(route.pattern);
 
       if (match) {
-        const params = match.groups || {}
-        console.log(params)
-        return await route.handler(method, params, usrAgent, reqBody, encodings)
+        const params = match.groups || {};
+        console.log(params);
+        return await route.handler(method, params, usrAgent, reqBody, encodings);
       }
     }
-    console.log("No route matched")
-    return undefined
+    console.log("No route matched");
+    return undefined;
   }
 }
+
 
 const router = new Router()
 
@@ -69,31 +70,31 @@ class responseBuilder {
     return this
   }
 
-  async buildResponse(acceptEncodings?: string[]): Promise<string> {
-    let body = this.contentBody
-    let validEncodings: string[] = []
+  async buildResponse(acceptEncodings?: string[]): Promise<{ headers: string, body: Buffer }> {
+    console.log("Encoding inside builder: ", acceptEncodings);
+    let body = this.contentBody;
+    let validEncodings: string[] = [];
     if (acceptEncodings !== undefined && acceptEncodings.length > 0) {
       for (let i = 0; i < acceptEncodings.length; i++) {
         if (serverEncodings.includes(acceptEncodings[i])) {
-          validEncodings.push(acceptEncodings[i])
+          validEncodings.push(acceptEncodings[i]);
         }
       }
       if (validEncodings.includes("gzip")) {
-        if (typeof body === 'string') {
-          body = Buffer.from(body, 'utf8');
+        if (typeof body === "string") {
+          body = Buffer.from(body, "utf8");
         }
-        body = zlib.gzipSync(body)
+        body = zlib.gzipSync(body);
         this.header("Content-Encoding", "gzip");
       }
     }
     this.header("Content-Length", body.length.toString());
-    const statusMsg = statuses[this.statusCode] || "Unknown Status"
+    const statusMsg = statuses[this.statusCode] || "Unknown Status";
     const headers = Object.entries(this.headers)
       .map(([key, value]) => `${key}: ${value}`)
-      .join(this.clrf)
-    const responseStr = `HTTP/1.1 ${this.statusCode} ${statusMsg}${this.clrf}`
-    let hexBody = body.toString("hex")
-    return `${responseStr}${headers}${this.clrf}${this.clrf}${hexBody}`
+      .join(this.clrf);
+    const responseStr = `HTTP/1.1 ${this.statusCode} ${statusMsg}${this.clrf}${headers}${this.clrf}${this.clrf}`;
+    return { headers: responseStr, body: Buffer.isBuffer(body) ? body : Buffer.from(body) };
   }
 }
 
@@ -160,30 +161,36 @@ router.addRoute(/^\/files\/(?<file>.+)$/, async (method, params, userAgent, reqB
 const server = net.createServer((socket) => {
   socket.on("data", async (data) => {
     try {
-      const req = data.toString()
-      const path = req.split(" ")[1]
-      const method = req.split(" ")[0].trim()
+      const req = data.toString();
+      const path = req.split(" ")[1];
+      const method = req.split(" ")[0].trim();
       const reqBody = req.split("\r\n\r\n")[1];
-      const usrAgentHeader = req.split("\n").find(line => line.startsWith("User-Agent:"))
-      const encodingHeader = req.split("\n").find(line => line.startsWith("Accept-Encoding:"))
-      const encodings = encodingHeader ? encodingHeader.slice(17).trim().split(", ") : undefined
-      console.log(`ENCODING=(${encodings})`)
-      const usrAgent = usrAgentHeader ? usrAgentHeader.slice(12).trim() : undefined
-      console.log(req)
-      let res = await router.handleReq(method, path, usrAgent, reqBody, encodings)
+      const usrAgentHeader = req.split("\n").find(line => line.startsWith("User-Agent:"));
+      const encodingHeader = req.split("\n").find(line => line.startsWith("Accept-Encoding:"));
+      const encodings = encodingHeader ? encodingHeader.slice(17).trim().split(", ") : undefined;
+      console.log(`ENCODING=(${encodings})`);
+      const usrAgent = usrAgentHeader ? usrAgentHeader.slice(12).trim() : undefined;
+      console.log(req);
+      let res = await router.handleReq(method, path, usrAgent, reqBody, encodings);
       if (res !== undefined) {
-        socket.write(res)
+        socket.write(res.headers, 'ascii');
+        socket.write(res.body);
       } else {
-        socket.write(await new responseBuilder().status(404).buildResponse())
+        let errorResponse = await new responseBuilder().status(404).buildResponse();
+        socket.write(errorResponse.headers, 'ascii');
+        socket.write(errorResponse.body);
       }
     } catch (err) {
-      console.error("Error processing request!", err)
-      socket.write(await new responseBuilder().status(500).buildResponse())
+      console.error("Error processing request!", err);
+      let errorResponse = await new responseBuilder().status(500).buildResponse();
+      socket.write(errorResponse.headers, 'ascii');
+      socket.write(errorResponse.body);
     } finally {
-      socket.end()
+      socket.end();
     }
-  })
+  });
 });
+
 
 // You can use print statements as follows for debugging, they"ll be visible when running tests.
 console.log("Logs from your program will appear here!");
