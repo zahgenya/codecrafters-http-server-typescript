@@ -1,38 +1,30 @@
-[![progress-banner](https://backend.codecrafters.io/progress/http-server/bf3b3508-75e7-424a-a19d-9e24b2c3e310)](https://app.codecrafters.io/users/zahgenya?r=2qF)
-
-This is a starting point for TypeScript solutions to the
-["Build Your Own HTTP server" Challenge](https://app.codecrafters.io/courses/http-server/overview).
-
-[HTTP](https://en.wikipedia.org/wiki/Hypertext_Transfer_Protocol) is the
-protocol that powers the web. In this challenge, you'll build a HTTP/1.1 server
-that is capable of serving multiple clients.
-
-Along the way you'll learn about TCP servers,
-[HTTP request syntax](https://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html),
-and more.
-
-**Note**: If you're viewing this repo on GitHub, head over to
-[codecrafters.io](https://codecrafters.io) to try the challenge.
-
-# Passing the first stage
-
-The entry point for your HTTP server implementation is in `app/main.ts`. Study
-and uncomment the relevant code, and push your changes to pass the first stage:
-
-```sh
-git add .
-git commit -m "pass 1st stage" # any msg
-git push origin master
+# HTTP Server
+This is my implementation of HTTP server built using Node.js. The server supports handling multiple routes, serves files, and supports gzip compression.
+## Features
+- Handle multiple routes with different HTTP methods.
+- Serve files from a specified directory.
+- Support gzip compression for responses.
+## Requirements
+- Node.js (>= 14.x) tested on 20.12.2
+- Bun need to be installed globaly
+## Installation
+1. Clone the repository:
+    ```bash
+    git clone https://github.com/zahgenya/codecrafters-http-server-typescript
+    cd codecrafters-http-server-typescript
+    ```
+2. Install dependencies (if any):
+    ```bash
+    npm install
+    ```
+## Usage
+To run the server:
+```bash
+$ ./your_server.sh
 ```
-
-Time to move on to the next stage!
-
-# Stage 2 & beyond
-
-Note: This section is for stages 2 and beyond.
-
-1. Ensure you have `bun (1.1)` installed locally
-1. Run `./your_server.sh` to run your program, which is implemented in
-   `app/main.ts`.
-1. Commit your changes and run `git push origin master` to submit your solution
-   to CodeCrafters. Test output will be streamed to your terminal.
+## Compression
+The server supports gzip compression for responses if the client requests it via the Accept-Encoding header.
+## Files feature
+The HTTP server supports serving files from a specified directory, allowing users to interact with resources stored on the server. Users can specify the base directory from which files will be served as a command-line argument when starting the server. This directory argument enables flexibility, as users can configure the server to serve files from different locations on their system or network. 
+## Environment Variables
+PORT: The port number on which the server listens (default is 4221).
